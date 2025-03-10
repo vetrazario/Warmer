@@ -4,7 +4,7 @@ import schedule
 import logging
 import os
 from datetime import datetime
-from app import create_app
+from app import create_app, mongo
 
 from app.services.email_service import process_all_active_campaigns, check_email_delivery, update_daily_stats
 
@@ -37,31 +37,33 @@ def scheduler_loop():
 def schedule_tasks():
     """Настраивает расписание задач"""
     # Отправка писем каждый час
-    schedule.every().hour.at(":00").do(process_all_active_campaigns)
+    schedule.every().hour.at(":00").do(lambda: run_with_context(process_all_active_campaigns))
     logger.info("Задача отправки писем запланирована на каждый час")
     
     # Проверка доставки писем каждый час в 30 минут
-    schedule.every().hour.at(":30").do(check_email_delivery)
+    schedule.every().hour.at(":30").do(lambda: run_with_context(check_email_delivery))
     logger.info("Задача проверки доставки писем запланирована на каждый час в 30 минут")
     
     # Обновление статистики каждый день в 23:00
-    schedule.every().day.at("23:00").do(update_statistics)
+    schedule.every().day.at("23:00").do(lambda: run_with_context(update_statistics))
     logger.info("Задача обновления статистики запланирована на 23:00 каждый день")
+
+def run_with_context(func, *args, **kwargs):
+    """Запускает функцию внутри контекста приложения"""
+    with app.app_context():
+        return func(*args, **kwargs)
 
 def update_statistics():
     """Обновляет статистику для всех кампаний"""
-    from app import db
-    from app.models import Campaign
-    
     logger.info("Обновление статистики для всех кампаний")
     
     try:
-        # Получаем все кампании
-        campaigns = Campaign.query.all()
+        # Получаем все кампании с использованием PyMongo
+        campaigns = list(mongo.db.campaigns.find({'active': True}))
         
         # Обновляем статистику для каждой кампании
         for campaign in campaigns:
-            update_daily_stats(campaign.id)
+            update_daily_stats(campaign['_id'])
         
         logger.info(f"Статистика обновлена для {len(campaigns)} кампаний")
     except Exception as e:
@@ -72,13 +74,14 @@ def run_task_now(task_name):
     logger.info(f"Запуск задачи {task_name} вручную")
     
     try:
-        if task_name == 'process_campaigns':
-            process_all_active_campaigns()
-        elif task_name == 'check_delivery':
-            check_email_delivery()
-        elif task_name == 'update_statistics':
-            update_statistics()
-        else:
-            logger.error(f"Неизвестная задача: {task_name}")
+        with app.app_context():
+            if task_name == 'process_campaigns':
+                process_all_active_campaigns()
+            elif task_name == 'check_delivery':
+                check_email_delivery()
+            elif task_name == 'update_statistics':
+                update_statistics()
+            else:
+                logger.error(f"Неизвестная задача: {task_name}")
     except Exception as e:
         logger.error(f"Ошибка при выполнении задачи {task_name}: {str(e)}") 

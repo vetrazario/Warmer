@@ -16,7 +16,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Проверка, что мы на Ubuntu 22.04
-if [ ! -f /etc/os-release ] || ! grep -q "Ubuntu 22.04" /etc/os-release; then
+if [ ! -f /etc/os-release ] || ! grep -q "Ubuntu" /etc/os-release; then
     echo "Этот скрипт предназначен для Ubuntu 22.04"
     echo "Ваша система:"
     cat /etc/os-release
@@ -43,8 +43,7 @@ echo -e "\n\e[1;33mЭтот скрипт настроит ваш сервер д
 # Запрос необходимой информации
 read -p "Введите домен или IP-адрес сервера: " SERVER_DOMAIN
 read -p "Использовать SSL (yes/no): " USE_SSL
-read -p "URL Git-репозитория (по умолчанию: https://github.com/yourusername/email-warmer.git): " GIT_REPO
-GIT_REPO=${GIT_REPO:-https://github.com/yourusername/email-warmer.git}
+read -p "URL Git-репозитория (оставьте пустым для текущего каталога): " GIT_REPO
 read -p "Порт для приложения (по умолчанию: 5000): " APP_PORT
 APP_PORT=${APP_PORT:-5000}
 
@@ -68,7 +67,7 @@ print_message "Обновление системы..."
 apt-get update && apt-get upgrade -y
 
 print_message "Установка необходимых пакетов..."
-apt-get install -y curl git docker.io docker-compose nginx certbot python3-certbot-nginx ufw
+apt-get install -y curl git docker.io docker-compose nginx certbot python3-certbot-nginx ufw python3-pip
 
 print_message "Настройка брандмауэра..."
 ufw allow 22/tcp
@@ -77,12 +76,20 @@ ufw allow 443/tcp
 ufw allow $APP_PORT/tcp
 ufw --force enable
 
+# Создание директории для приложения
 print_message "Создание директории для приложения..."
-mkdir -p /var/www/email-warmer
-cd /var/www/email-warmer
+APP_DIR="/var/www/email-warmer"
+mkdir -p $APP_DIR
+cd $APP_DIR
 
-print_message "Клонирование репозитория..."
-git clone $GIT_REPO .
+# Установка кода приложения
+if [ -z "$GIT_REPO" ]; then
+    print_message "Копирование локальных файлов..."
+    cp -r $(pwd)/* $APP_DIR/
+else
+    print_message "Клонирование репозитория..."
+    git clone $GIT_REPO .
+fi
 
 print_message "Настройка .env файла..."
 cat > .env << EOF
@@ -105,15 +112,17 @@ FLASK_APP=app
 FLASK_ENV=production
 EOF
 
-print_message "Настройка Docker Compose..."
-# Создание директории для данных MongoDB
+# Создание директории для MongoDB и установка правильных прав
+print_message "Создание директории для данных MongoDB..."
 mkdir -p /var/data/mongodb
-chmod 777 /var/data/mongodb
+chown -R root:root /var/data/mongodb
+chmod -R 777 /var/data/mongodb
 
-# Обновление docker-compose.yml для использования внешнего тома
-sed -i "s|- mongo-data:/data/db|- /var/data/mongodb:/data/db|g" docker-compose.yml
+print_message "Настройка Docker..."
+systemctl enable docker
+systemctl start docker
 
-print_message "Создание скриптов управления..."
+print_message "Настройка скриптов управления..."
 
 # Скрипт запуска
 cat > start.sh << 'EOF'
@@ -150,101 +159,143 @@ docker-compose logs --tail=100 -f
 EOF
 chmod +x logs.sh
 
-# Скрипт обновления
-cat > update.sh << 'EOF'
+# Скрипт проверки статуса
+cat > status.sh << 'EOF'
 #!/bin/bash
-set -e
 cd "$(dirname "$0")"
-echo "Остановка контейнеров..."
-docker-compose down
-
-echo "Создание резервной копии данных..."
-BACKUP_DIR="/var/backups/email-warmer/$(date +%Y%m%d_%H%M%S)"
-mkdir -p $BACKUP_DIR
-cp -r /var/data/mongodb $BACKUP_DIR/
-cp .env $BACKUP_DIR/
-
-echo "Получение последних изменений из репозитория..."
-git fetch
-git reset --hard origin/main
-
-echo "Запуск контейнеров..."
-docker-compose up -d --build
-
-echo "Обновление завершено успешно!"
+docker-compose ps
 EOF
-chmod +x update.sh
+chmod +x status.sh
 
-# Настройка автоматического резервного копирования
-print_message "Настройка автоматического резервного копирования..."
-mkdir -p /var/backups/email-warmer
-
-cat > /etc/cron.daily/backup-email-warmer << 'EOF'
+# Скрипт резервного копирования
+cat > backup.sh << 'EOF'
 #!/bin/bash
-BACKUP_DIR="/var/backups/email-warmer/$(date +%Y%m%d)"
+# Директория для резервных копий
+BACKUP_DIR="/var/backups/email-warmer"
 mkdir -p $BACKUP_DIR
-cp -r /var/data/mongodb $BACKUP_DIR/
-cp /var/www/email-warmer/.env $BACKUP_DIR/
 
-# Удаление старых резервных копий (старше 30 дней)
-find /var/backups/email-warmer -type d -mtime +30 -exec rm -rf {} \; 2>/dev/null || true
+# Текущая дата и время для имени файла
+DATE=$(date +"%Y-%m-%d-%H%M%S")
+BACKUP_FILE="$BACKUP_DIR/backup-$DATE.tar.gz"
+
+# Остановка контейнеров
+cd "$(dirname "$0")"
+docker-compose stop
+
+# Архивирование файлов и БД
+tar -czf $BACKUP_FILE -C /var/data/mongodb .
+tar -rf $BACKUP_FILE -C $(dirname "$0") .
+
+# Запуск контейнеров
+docker-compose start
+
+echo "Резервная копия создана: $BACKUP_FILE"
 EOF
-chmod +x /etc/cron.daily/backup-email-warmer
+chmod +x backup.sh
 
-# Настройка Nginx
 print_message "Настройка Nginx..."
-cat > /etc/nginx/sites-available/email-warmer << EOF
+if [ "$USE_SSL" = "yes" ]; then
+    # Конфигурация Nginx с SSL
+    cat > /etc/nginx/sites-available/email-warmer << EOF
 server {
     listen 80;
     server_name $SERVER_DOMAIN;
+    return 301 https://\$host\$request_uri;
+}
 
+server {
+    listen 443 ssl;
+    server_name $SERVER_DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/$SERVER_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$SERVER_DOMAIN/privkey.pem;
+    
     location / {
-        proxy_pass http://localhost:$APP_PORT;
+        proxy_pass http://127.0.0.1:$APP_PORT;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
+
+    location /static {
+        alias $APP_DIR/app/static;
+        expires 30d;
+    }
 }
 EOF
 
+    # Получение SSL-сертификата Let's Encrypt
+    print_message "Получение SSL-сертификата..."
+    certbot --nginx -d $SERVER_DOMAIN --non-interactive --agree-tos --email admin@$SERVER_DOMAIN
+
+else
+    # Конфигурация Nginx без SSL
+    cat > /etc/nginx/sites-available/email-warmer << EOF
+server {
+    listen 80;
+    server_name $SERVER_DOMAIN;
+    
+    location / {
+        proxy_pass http://127.0.0.1:$APP_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /static {
+        alias $APP_DIR/app/static;
+        expires 30d;
+    }
+}
+EOF
+fi
+
+# Включение конфигурации Nginx
 ln -sf /etc/nginx/sites-available/email-warmer /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl restart nginx
+systemctl restart nginx
 
-# Настройка SSL, если требуется
-if [[ "$USE_SSL" =~ ^[Yy][Ee][Ss]$ ]]; then
-    print_message "Настройка SSL с помощью Let's Encrypt..."
-    certbot --nginx -d $SERVER_DOMAIN --non-interactive --agree-tos --email admin@$SERVER_DOMAIN
-    
-    # Настройка автоматического обновления сертификатов
-    echo "0 3 * * * root certbot renew --quiet" > /etc/cron.d/certbot-renew
-fi
-
-# Запуск приложения
 print_message "Запуск приложения..."
-cd /var/www/email-warmer
-docker-compose up -d
+cd $APP_DIR
+./start.sh
 
-# Проверка статуса
-print_message "Проверка статуса приложения..."
-sleep 10
-if curl -s http://localhost:$APP_PORT/api/health | grep -q "healthy"; then
-    echo -e "\n\e[1;32mEmail Warmer успешно установлен и запущен!\e[0m"
-    echo -e "Вы можете получить доступ к приложению по адресу: \e[1mhttp://$SERVER_DOMAIN\e[0m"
-    if [[ "$USE_SSL" =~ ^[Yy][Ee][Ss]$ ]]; then
-        echo -e "или \e[1mhttps://$SERVER_DOMAIN\e[0m"
-    fi
+# Создание сервиса systemd для автоматического запуска
+print_message "Настройка автозапуска..."
+cat > /etc/systemd/system/email-warmer.service << EOF
+[Unit]
+Description=Email Warmer
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$APP_DIR
+ExecStart=$APP_DIR/start.sh
+ExecStop=$APP_DIR/stop.sh
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable email-warmer
+
+print_message "Установка завершена!"
+echo -e "\n\e[1;32mEmail Warmer успешно установлен и запущен!\e[0m"
+
+if [ "$USE_SSL" = "yes" ]; then
+    echo -e "\nПриложение доступно по адресу: \e[1mhttps://$SERVER_DOMAIN\e[0m"
 else
-    echo -e "\n\e[1;31mВозникла проблема при запуске приложения.\e[0m"
-    echo "Проверьте логи для получения дополнительной информации:"
-    echo "sudo ./logs.sh"
+    echo -e "\nПриложение доступно по адресу: \e[1mhttp://$SERVER_DOMAIN\e[0m"
 fi
 
-echo -e "\nДля управления приложением используйте следующие команды:"
-echo "cd /var/www/email-warmer"
-echo "./start.sh - запуск приложения"
-echo "./stop.sh - остановка приложения"
-echo "./restart.sh - перезапуск приложения"
-echo "./logs.sh - просмотр логов"
-echo "./update.sh - обновление приложения" 
+echo -e "\nУправление приложением:"
+echo "  Запуск:       sudo systemctl start email-warmer"
+echo "  Остановка:    sudo systemctl stop email-warmer"
+echo "  Перезапуск:   sudo systemctl restart email-warmer"
+echo "  Статус:       sudo systemctl status email-warmer"
+echo "  Просмотр логов: $APP_DIR/logs.sh" 
