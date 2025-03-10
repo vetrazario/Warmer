@@ -4,8 +4,12 @@ import schedule
 import logging
 import os
 from datetime import datetime
+from app import create_app
 
 from app.services.email_service import process_all_active_campaigns, check_email_delivery, update_daily_stats
+
+# Создаем экземпляр приложения для использования в контексте
+app = create_app()
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -19,11 +23,13 @@ def run_scheduler():
 
 def scheduler_loop():
     """Основной цикл планировщика задач"""
-    schedule_tasks()
+    with app.app_context():
+        schedule_tasks()
     
     while True:
         try:
-            schedule.run_pending()
+            with app.app_context():
+                schedule.run_pending()
             time.sleep(60)  # Проверяем задачи каждую минуту
         except Exception as e:
             logger.error(f"Ошибка в цикле планировщика: {str(e)}")

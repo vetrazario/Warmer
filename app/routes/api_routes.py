@@ -529,4 +529,16 @@ def get_logs():
     
     return jsonify({
         'logs': [log.to_dict() for log in logs]
-    }) 
+    })
+
+@api_bp.route('/health', methods=['GET'])
+def health_check():
+    """Проверка здоровья приложения для Docker healthcheck"""
+    try:
+        # Проверяем соединение с MongoDB
+        from flask import current_app
+        from app import mongo
+        mongo.db.command('ping')
+        return jsonify({'status': 'ok', 'message': 'Application is healthy'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500 

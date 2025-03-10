@@ -14,10 +14,18 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dg6MQ9L4pZxbCE3r8F1h2Jk5VyTsW7D0}
       - DEBUG=False
       - SCHEDULER_ENABLED=True
+      - TZ=UTC
+      - PORT=5000
     depends_on:
       - mongo
     networks:
       - email-warmer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   mongo:
     image: mongo:4.4
@@ -29,6 +37,14 @@ services:
       - "27017:27017"
     networks:
       - email-warmer-network
+    environment:
+      - MONGO_INITDB_DATABASE=email_warmer
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/email_warmer --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   email-warmer-network:
