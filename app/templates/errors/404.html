@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Страница не найдена - Email Warmer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container mt-5 pt-5">
+        <div class="row">
+            <div class="col-md-6 mx-auto text-center">
+                <div class="error-template">
+                    <h1>404</h1>
+                    <h2>Страница не найдена</h2>
+                    <div class="error-details mb-4">
+                        Извините, запрашиваемая страница не существует или была перемещена.
+                    </div>
+                    <div class="error-actions">
+                        <a href="{{ url_for('page_routes.index') }}" class="btn btn-primary btn-lg">
+                            <i class="fa fa-home"></i> Вернуться на главную
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+</body>
+</html> 

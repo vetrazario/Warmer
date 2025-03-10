@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: email-warmer-app
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./instance:/app/instance
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/email_warmer
+      - SECRET_KEY=${SECRET_KEY:-dg6MQ9L4pZxbCE3r8F1h2Jk5VyTsW7D0}
+      - DEBUG=False
+      - SCHEDULER_ENABLED=True
+    depends_on:
+      - mongo
+    networks:
+      - email-warmer-network
+
+  mongo:
+    image: mongo:4.4
+    container_name: email-warmer-mongo
+    restart: always
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - email-warmer-network
+
+networks:
+  email-warmer-network:
+    driver: bridge
+
+volumes:
+  mongo-data: 

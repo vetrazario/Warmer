@@ -1,0 +1,37 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Кэши
+.cache/
+.pytest_cache/
+pytest-env/
+
+# Логи
+logs/
+*.log
+
+# Системные файлы
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Директории и файлы окружения
+env/
+venv/
+ENV/
+instance/
+.env
+.env.*
+!.env.example
+
+# Файлы тестирования
+.coverage
+htmlcov/
+
+# Директории сборки
+dist/
+build/
+*.egg-info/ 

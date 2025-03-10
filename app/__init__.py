@@ -1,25 +1,26 @@
 import os
 from dotenv import load_dotenv
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
+from flask_pymongo import PyMongo
 from flask_cors import CORS
 
 # Загрузка переменных окружения из .env файла
 load_dotenv()
 
 # Инициализация расширений
-db = SQLAlchemy()
+mongo = PyMongo()
 
 def create_app():
     """Создает и настраивает экземпляр приложения Flask"""
     app = Flask(__name__)
     
-    # Настройка базы данных
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///email_warmer.db'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Настройка базы данных MongoDB
+    app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017/email_warmer')
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default-dev-key')
+    app.config['DEBUG'] = os.getenv('DEBUG', 'False').lower() == 'true'
     
     # Инициализация расширений с приложением
-    db.init_app(app)
+    mongo.init_app(app)
     CORS(app)
     
     # Регистрация маршрутов
@@ -27,8 +28,13 @@ def create_app():
     app.register_blueprint(api_routes.api_bp, url_prefix='/api')
     app.register_blueprint(page_routes.bp)
     
-    # Создание таблиц базы данных
-    with app.app_context():
-        db.create_all()
+    # Регистрация обработчиков ошибок
+    from app.utils.error_handlers import register_error_handlers
+    register_error_handlers(app)
+    
+    # Инициализация планировщика задач
+    from app.services.scheduler import run_scheduler
+    if os.getenv('SCHEDULER_ENABLED', 'False').lower() == 'true':
+        run_scheduler()
     
     return app 
