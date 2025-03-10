@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статистика кампании - Email Warmer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats-card {
+            text-align: center;
+            padding: 15px;
+        }
+        .stats-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+        .stats-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .email-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Email Warmer</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Главная</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/smtp-test">SMTP-серверы</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/campaigns">Кампании</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">Дашборд</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logs">Логи</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container mt-4">
+        <div id="alertContainer"></div>
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 id="campaign-name">Статистика кампании</h2>
+            <a href="/campaigns" class="btn btn-outline-primary">Назад к кампаниям</a>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Всего отправлено</h3>
+                    <div class="value" id="total-sent">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Доставлено</h3>
+                    <div class="value" id="delivered">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Получено ответов</h3>
+                    <div class="value" id="replied">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Помечено как спам</h3>
+                    <div class="value" id="spam">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Информация о кампании</h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <tbody>
+                                <tr>
+                                    <th>Статус:</th>
+                                    <td id="campaign-status">-</td>
+                                </tr>
+                                <tr>
+                                    <th>SMTP-сервер:</th>
+                                    <td id="smtp-server">-</td>
+                                </tr>
+                                <tr>
+                                    <th>Дата начала:</th>
+                                    <td id="start-date">-</td>
+                                </tr>
+                                <tr>
+                                    <th>Текущий объем:</th>
+                                    <td id="current-volume">-</td>
+                                </tr>
+                                <tr>
+                                    <th>Максимальный объем:</th>
+                                    <td id="max-volume">-</td>
+                                </tr>
+                                <tr>
+                                    <th>Прогресс:</th>
+                                    <td>
+                                        <div class="progress">
+                                            <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Ожидаемая дата завершения:</th>
+                                    <td id="expected-end-date">-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="mt-3 d-flex" id="action-buttons">
+                            <!-- Кнопки действий будут добавлены динамически -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Динамика отправки писем</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="emailChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>История отправленных писем</h3>
+            </div>
+            <div class="card-body email-list">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Получатель</th>
+                                <th>Тема</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody id="email-history">
+                            <tr>
+                                <td colspan="4" class="text-center">Загрузка истории писем...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Получаем ID кампании из URL
+        const campaignId = window.location.pathname.split('/').pop();
+        let emailChart = null;
+        
+        // Функция для отображения уведомлений
+        function showAlert(message, type = "success") {
+            const alertDiv = document.createElement("div");
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            const alertContainer = document.getElementById("alertContainer");
+            alertContainer.appendChild(alertDiv);
+            
+            // Автоматически скрыть уведомление через 5 секунд
+            setTimeout(() => {
+                alertDiv.classList.remove("show");
+                setTimeout(() => alertDiv.remove(), 500);
+            }, 5000);
+        }
+        
+        // Загрузка данных кампании
+        function loadCampaignData() {
+            fetch(`/api/campaigns/${campaignId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при загрузке данных кампании');
+                    }
+                    return response.json();
+                })
+                .then(campaign => {
+                    // Заполняем информацию о кампании
+                    document.getElementById('campaign-name').textContent = `Статистика кампании: ${campaign.name}`;
+                    document.getElementById('campaign-status').textContent = getStatusText(campaign.status);
+                    document.getElementById('campaign-status').className = getStatusClass(campaign.status);
+                    document.getElementById('smtp-server').textContent = campaign.smtp_server_name;
+                    document.getElementById('start-date').textContent = new Date(campaign.start_date).toLocaleDateString('ru-RU');
+                    document.getElementById('current-volume').textContent = `${campaign.current_emails_per_day} писем в день`;
+                    document.getElementById('max-volume').textContent = `${campaign.max_emails_per_day} писем в день`;
+                    
+                    // Обновляем прогресс-бар
+                    const progressBar = document.getElementById('progress-bar');
+                    progressBar.style.width = `${campaign.progress}%`;
+                    progressBar.textContent = `${campaign.progress}%`;
+                    progressBar.setAttribute('aria-valuenow', campaign.progress);
+                    
+                    // Расчет ожидаемой даты завершения
+                    if (campaign.expected_end_date) {
+                        document.getElementById('expected-end-date').textContent = new Date(campaign.expected_end_date).toLocaleDateString('ru-RU');
+                    } else {
+                        document.getElementById('expected-end-date').textContent = 'Не определено';
+                    }
+                    
+                    // Добавляем кнопки действий в зависимости от статуса
+                    const actionButtons = document.getElementById('action-buttons');
+                    actionButtons.innerHTML = '';
+                    
+                    if (campaign.status === 'active') {
+                        actionButtons.innerHTML += `
+                            <button class="btn btn-warning me-2" onclick="pauseCampaign()">Приостановить</button>
+                            <button class="btn btn-danger" onclick="completeCampaign()">Завершить</button>
+                        `;
+                    } else if (campaign.status === 'paused') {
+                        actionButtons.innerHTML += `
+                            <button class="btn btn-success me-2" onclick="resumeCampaign()">Возобновить</button>
+                            <button class="btn btn-danger" onclick="completeCampaign()">Завершить</button>
+                        `;
+                    }
+                    
+                    // Загружаем статистику
+                    loadCampaignStats();
+                    
+                    // Загружаем историю писем
+                    loadEmailHistory();
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert('Ошибка при загрузке данных кампании', 'danger');
+                });
+        }
+        
+        // Загрузка статистики кампании
+        function loadCampaignStats() {
+            fetch(`/api/campaigns/${campaignId}/stats`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при загрузке статистики');
+                    }
+                    return response.json();
+                })
+                .then(stats => {
+                    // Обновляем счетчики
+                    document.getElementById('total-sent').textContent = stats.total_sent;
+                    document.getElementById('delivered').textContent = stats.delivered;
+                    document.getElementById('replied').textContent = stats.replied;
+                    document.getElementById('spam').textContent = stats.spam;
+                    
+                    // Создаем график
+                    createEmailChart(stats.daily_stats);
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert('Ошибка при загрузке статистики', 'danger');
+                });
+        }
+        
+        // Создание графика отправки писем
+        function createEmailChart(dailyStats) {
+            const ctx = document.getElementById('emailChart').getContext('2d');
+            
+            // Если график уже существует, уничтожаем его
+            if (emailChart) {
+                emailChart.destroy();
+            }
+            
+            // Подготавливаем данные для графика
+            const labels = dailyStats.map(item => item.date);
+            const sentData = dailyStats.map(item => item.sent);
+            const deliveredData = dailyStats.map(item => item.delivered);
+            
+            // Создаем новый график
+            emailChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Отправлено',
+                            data: sentData,
+                            borderColor: '#007bff',
+                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                            tension: 0.1,
+                            fill: true
+                        },
+                        {
+                            label: 'Доставлено',
+                            data: deliveredData,
+                            borderColor: '#28a745',
+                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                            tension: 0.1,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Загрузка истории отправленных писем
+        function loadEmailHistory() {
+            fetch(`/api/campaigns/${campaignId}/emails`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при загрузке истории писем');
+                    }
+                    return response.json();
+                })
+                .then(emails => {
+                    const emailHistoryTable = document.getElementById('email-history');
+                    
+                    if (emails.length === 0) {
+                        emailHistoryTable.innerHTML = '<tr><td colspan="4" class="text-center">Нет отправленных писем</td></tr>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    emails.forEach(email => {
+                        const sentDate = new Date(email.sent_at).toLocaleString('ru-RU');
+                        const statusClass = getEmailStatusClass(email.status);
+                        const statusText = getEmailStatusText(email.status);
+                        
+                        html += `
+                            <tr>
+                                <td>${sentDate}</td>
+                                <td>${email.to_email}</td>
+                                <td>${email.subject}</td>
+                                <td><span class="badge ${statusClass}">${statusText}</span></td>
+                            </tr>
+                        `;
+                    });
+                    
+                    emailHistoryTable.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert('Ошибка при загрузке истории писем', 'danger');
+                });
+        }
+        
+        // Приостановка кампании
+        function pauseCampaign() {
+            if (confirm('Вы уверены, что хотите приостановить эту кампанию?')) {
+                fetch(`/api/campaigns/${campaignId}/pause`, {
+                    method: 'POST'
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Ошибка при приостановке кампании');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        showAlert(data.message, 'success');
+                        loadCampaignData();
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        showAlert('Ошибка при приостановке кампании', 'danger');
+                    });
+            }
+        }
+        
+        // Возобновление кампании
+        function resumeCampaign() {
+            fetch(`/api/campaigns/${campaignId}/resume`, {
+                method: 'POST'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при возобновлении кампании');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showAlert(data.message, 'success');
+                    loadCampaignData();
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert('Ошибка при возобновлении кампании', 'danger');
+                });
+        }
+        
+        // Завершение кампании
+        function completeCampaign() {
+            if (confirm('Вы уверены, что хотите завершить эту кампанию? Это действие нельзя отменить.')) {
+                fetch(`/api/campaigns/${campaignId}/complete`, {
+                    method: 'POST'
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Ошибка при завершении кампании');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        showAlert(data.message, 'success');
+                        loadCampaignData();
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        showAlert('Ошибка при завершении кампании', 'danger');
+                    });
+            }
+        }
+        
+        // Вспомогательные функции для отображения статусов
+        function getStatusText(status) {
+            switch (status) {
+                case 'active': return 'Активна';
+                case 'paused': return 'Приостановлена';
+                case 'completed': return 'Завершена';
+                default: return status;
+            }
+        }
+        
+        function getStatusClass(status) {
+            switch (status) {
+                case 'active': return 'text-success';
+                case 'paused': return 'text-warning';
+                case 'completed': return 'text-secondary';
+                default: return '';
+            }
+        }
+        
+        function getEmailStatusText(status) {
+            switch (status) {
+                case 'sent': return 'Отправлено';
+                case 'delivered': return 'Доставлено';
+                case 'opened': return 'Открыто';
+                case 'replied': return 'Получен ответ';
+                case 'spam': return 'Спам';
+                case 'failed': return 'Ошибка';
+                default: return status;
+            }
+        }
+        
+        function getEmailStatusClass(status) {
+            switch (status) {
+                case 'sent': return 'bg-primary';
+                case 'delivered': return 'bg-success';
+                case 'opened': return 'bg-info';
+                case 'replied': return 'bg-warning';
+                case 'spam': return 'bg-danger';
+                case 'failed': return 'bg-secondary';
+                default: return 'bg-light';
+            }
+        }
+        
+        // Загружаем данные при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCampaignData();
+        });
+    </script>
+</body>
+</html> 

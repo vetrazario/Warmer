@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMTP-серверы - Email Warmer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .btn {
+            margin-right: 5px;
+        }
+        .server-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Email Warmer</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Главная</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/smtp-test">SMTP-серверы</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/campaigns">Кампании</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">Дашборд</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logs">Логи</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container mt-4">
+        <div id="alertContainer"></div>
+        
+        <h2>SMTP-серверы</h2>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3>Добавить новый SMTP-сервер</h3>
+            </div>
+            <div class="card-body">
+                <form id="smtpForm">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Название сервера</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                        <small class="text-muted">Например: Gmail Рабочий, Yandex Личный и т.д.</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="host" class="form-label">Хост SMTP-сервера</label>
+                        <input type="text" class="form-control" id="host" name="host" required>
+                        <small class="text-muted">Например: smtp.gmail.com, smtp.yandex.ru</small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="port" class="form-label">Порт</label>
+                                <input type="number" class="form-control" id="port" name="port" value="587" required>
+                                <small class="text-muted">Обычно 587 (TLS) или 465 (SSL)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="use_ssl" class="form-label">Использовать SSL/TLS</label>
+                                <select class="form-select" id="use_ssl" name="use_ssl">
+                                    <option value="tls">TLS (порт 587)</option>
+                                    <option value="ssl">SSL (порт 465)</option>
+                                    <option value="none">Без шифрования</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Имя пользователя</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                        <small class="text-muted">Обычно это ваш email-адрес</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Пароль</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                        <small class="text-muted">Для Gmail рекомендуется использовать пароль приложения</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="from_email" class="form-label">Email отправителя</label>
+                        <input type="email" class="form-control" id="from_email" name="from_email" required>
+                        <small class="text-muted">Email-адрес, от имени которого будут отправляться письма</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="from_name" class="form-label">Имя отправителя</label>
+                        <input type="text" class="form-control" id="from_name" name="from_name" required>
+                        <small class="text-muted">Имя, которое будет отображаться у получателя</small>
+                    </div>
+                    
+                    <div class="d-flex">
+                        <button type="submit" class="btn btn-primary">Добавить сервер</button>
+                        <button type="button" class="btn btn-outline-primary" id="testConnection">Проверить соединение</button>
+                        <button type="reset" class="btn btn-secondary">Сбросить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3>Список SMTP-серверов</h3>
+            </div>
+            <div class="card-body server-list">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>Хост</th>
+                                <th>Порт</th>
+                                <th>Имя пользователя</th>
+                                <th>Email отправителя</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="smtp-servers-list">
+                            <tr>
+                                <td colspan="6" class="text-center">Загрузка списка серверов...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модальное окно для редактирования сервера -->
+    <div class="modal fade" id="editServerModal" tabindex="-1" aria-labelledby="editServerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editServerModalLabel">Редактировать SMTP-сервер</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editSmtpForm">
+                        <input type="hidden" id="edit_server_id" name="server_id">
+                        
+                        <div class="mb-3">
+                            <label for="edit_name" class="form-label">Название сервера</label>
+                            <input type="text" class="form-control" id="edit_name" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="edit_host" class="form-label">Хост SMTP-сервера</label>
+                            <input type="text" class="form-control" id="edit_host" name="host" required>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="edit_port" class="form-label">Порт</label>
+                                    <input type="number" class="form-control" id="edit_port" name="port" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="edit_use_ssl" class="form-label">Использовать SSL/TLS</label>
+                                    <select class="form-select" id="edit_use_ssl" name="use_ssl">
+                                        <option value="tls">TLS (порт 587)</option>
+                                        <option value="ssl">SSL (порт 465)</option>
+                                        <option value="none">Без шифрования</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="edit_username" class="form-label">Имя пользователя</label>
+                            <input type="text" class="form-control" id="edit_username" name="username" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="edit_password" class="form-label">Пароль</label>
+                            <input type="password" class="form-control" id="edit_password" name="password" placeholder="Оставьте пустым, чтобы не менять">
+                            <small class="text-muted">Оставьте пустым, если не хотите менять пароль</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="edit_from_email" class="form-label">Email отправителя</label>
+                            <input type="email" class="form-control" id="edit_from_email" name="from_email" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="edit_from_name" class="form-label">Имя отправителя</label>
+                            <input type="text" class="form-control" id="edit_from_name" name="from_name" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="saveServerChanges">Сохранить изменения</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Функция для отображения уведомлений
+        function showAlert(message, type = "success") {
+            const alertDiv = document.createElement("div");
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            const alertContainer = document.getElementById("alertContainer");
+            alertContainer.appendChild(alertDiv);
+            
+            // Автоматически скрыть уведомление через 5 секунд
+            setTimeout(() => {
+                alertDiv.classList.remove("show");
+                setTimeout(() => alertDiv.remove(), 500);
+            }, 5000);
+        }
+        
+        // Загрузка списка SMTP-серверов
+        function loadSmtpServers() {
+            fetch('/api/smtp')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при загрузке SMTP-серверов');
+                    }
+                    return response.json();
+                })
+                .then(servers => {
+                    const serversList = document.getElementById('smtp-servers-list');
+                    
+                    if (servers.length === 0) {
+                        serversList.innerHTML = '<tr><td colspan="6" class="text-center">Нет добавленных SMTP-серверов</td></tr>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    servers.forEach(server => {
+                        html += `
+                            <tr>
+                                <td>${server.name}</td>
+                                <td>${server.host}</td>
+                                <td>${server.port}</td>
+                                <td>${server.username}</td>
+                                <td>${server.from_email}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary test-server" data-id="${server.id}">Проверить</button>
+                                    <button class="btn btn-sm btn-info edit-server" data-id="${server.id}">Редактировать</button>
+                                    <button class="btn btn-sm btn-danger delete-server" data-id="${server.id}">Удалить</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    serversList.innerHTML = html;
+                    
+                    // Добавляем обработчики событий для кнопок
+                    document.querySelectorAll('.test-server').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const serverId = this.dataset.id;
+                            testSmtpServer(serverId);
+                        });
+                    });
+                    
+                    document.querySelectorAll('.edit-server').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const serverId = this.dataset.id;
+                            openEditServerModal(serverId);
+                        });
+                    });
+                    
+                    document.querySelectorAll('.delete-server').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const serverId = this.dataset.id;
+                            deleteSmtpServer(serverId);
+                        });
+                    });
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert('Ошибка при загрузке SMTP-серверов', 'danger');
+                });
+        }
+        
+        // Добавление нового SMTP-сервера
+        function addSmtpServer(formData) {
+            // Создаем объект с данными сервера
+            const serverData = {
+                name: formData.get('name'),
+                host: formData.get('host'),
+                port: parseInt(formData.get('port')),
+                use_ssl: formData.get('use_ssl'),
+                username: formData.get('username'),
+                password: formData.get('password'),
+                from_email: formData.get('from_email'),
+                from_name: formData.get('from_name')
+            };
+            
+            // Отправляем запрос на добавление сервера
+            fetch('/api/smtp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(serverData)
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.error || 'Ошибка при добавлении SMTP-сервера');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showAlert(`SMTP-сервер "${data.name}" успешно добавлен!`, 'success');
+                    document.getElementById('smtpForm').reset();
+                    loadSmtpServers();
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert(`Ошибка при добавлении SMTP-сервера: ${error.message}`, 'danger');
+                });
+        }
+        
+        // Проверка соединения с SMTP-сервером
+        function testSmtpConnection(formData) {
+            // Создаем объект с данными для проверки
+            const testData = {
+                host: formData.get('host'),
+                port: parseInt(formData.get('port')),
+                use_ssl: formData.get('use_ssl'),
+                username: formData.get('username'),
+                password: formData.get('password')
+            };
+            
+            // Отправляем запрос на проверку соединения
+            fetch('/api/smtp/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testData)
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.error || 'Ошибка при проверке соединения');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showAlert(data.message, 'success');
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert(`Ошибка при проверке соединения: ${error.message}`, 'danger');
+                });
+        }
+        
+        // Проверка существующего SMTP-сервера
+        function testSmtpServer(serverId) {
+            fetch(`/api/smtp/${serverId}/test`, {
+                method: 'POST'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.error || 'Ошибка при проверке сервера');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showAlert(data.message, 'success');
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert(`Ошибка при проверке сервера: ${error.message}`, 'danger');
+                });
+        }
+        
+        // Открытие модального окна для редактирования сервера
+        function openEditServerModal(serverId) {
+            fetch(`/api/smtp/${serverId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при получении данных сервера');
+                    }
+                    return response.json();
+                })
+                .then(server => {
+                    // Заполняем форму данными сервера
+                    document.getElementById('edit_server_id').value = server.id;
+                    document.getElementById('edit_name').value = server.name;
+                    document.getElementById('edit_host').value = server.host;
+                    document.getElementById('edit_port').value = server.port;
+                    document.getElementById('edit_use_ssl').value = server.use_ssl;
+                    document.getElementById('edit_username').value = server.username;
+                    document.getElementById('edit_from_email').value = server.from_email;
+                    document.getElementById('edit_from_name').value = server.from_name;
+                    
+                    // Открываем модальное окно
+                    const editServerModal = new bootstrap.Modal(document.getElementById('editServerModal'));
+                    editServerModal.show();
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert('Ошибка при получении данных сервера', 'danger');
+                });
+        }
+        
+        // Сохранение изменений сервера
+        function saveServerChanges() {
+            const formData = new FormData(document.getElementById('editSmtpForm'));
+            const serverId = formData.get('server_id');
+            
+            // Создаем объект с данными сервера
+            const serverData = {
+                name: formData.get('name'),
+                host: formData.get('host'),
+                port: parseInt(formData.get('port')),
+                use_ssl: formData.get('use_ssl'),
+                username: formData.get('username'),
+                from_email: formData.get('from_email'),
+                from_name: formData.get('from_name')
+            };
+            
+            // Добавляем пароль только если он был изменен
+            if (formData.get('password')) {
+                serverData.password = formData.get('password');
+            }
+            
+            // Отправляем запрос на обновление сервера
+            fetch(`/api/smtp/${serverId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(serverData)
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.error || 'Ошибка при обновлении сервера');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    showAlert(`SMTP-сервер "${data.name}" успешно обновлен!`, 'success');
+                    
+                    // Закрываем модальное окно
+                    const editServerModal = bootstrap.Modal.getInstance(document.getElementById('editServerModal'));
+                    editServerModal.hide();
+                    
+                    // Обновляем список серверов
+                    loadSmtpServers();
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    showAlert(`Ошибка при обновлении сервера: ${error.message}`, 'danger');
+                });
+        }
+        
+        // Удаление SMTP-сервера
+        function deleteSmtpServer(serverId) {
+            if (confirm('Вы уверены, что хотите удалить этот SMTP-сервер? Это действие нельзя отменить.')) {
+                fetch(`/api/smtp/${serverId}`, {
+                    method: 'DELETE'
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Ошибка при удалении сервера');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        showAlert(data.message, 'success');
+                        loadSmtpServers();
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        showAlert('Ошибка при удалении сервера', 'danger');
+                    });
+            }
+        }
+        
+        // Обработчики событий
+        document.addEventListener('DOMContentLoaded', function() {
+            // Загружаем список серверов
+            loadSmtpServers();
+            
+            // Обработчик отправки формы добавления сервера
+            document.getElementById('smtpForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                addSmtpServer(formData);
+            });
+            
+            // Обработчик кнопки проверки соединения
+            document.getElementById('testConnection').addEventListener('click', function() {
+                const formData = new FormData(document.getElementById('smtpForm'));
+                testSmtpConnection(formData);
+            });
+            
+            // Обработчик кнопки сохранения изменений
+            document.getElementById('saveServerChanges').addEventListener('click', saveServerChanges);
+            
+            // Обработчик изменения типа шифрования
+            document.getElementById('use_ssl').addEventListener('change', function() {
+                const portInput = document.getElementById('port');
+                if (this.value === 'ssl') {
+                    portInput.value = '465';
+                } else if (this.value === 'tls') {
+                    portInput.value = '587';
+                } else {
+                    portInput.value = '25';
+                }
+            });
+            
+            // Обработчик изменения типа шифрования в модальном окне
+            document.getElementById('edit_use_ssl').addEventListener('change', function() {
+                const portInput = document.getElementById('edit_port');
+                if (this.value === 'ssl') {
+                    portInput.value = '465';
+                } else if (this.value === 'tls') {
+                    portInput.value = '587';
+                } else {
+                    portInput.value = '25';
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

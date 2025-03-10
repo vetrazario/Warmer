@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Дашборд - Email Warmer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats-card {
+            text-align: center;
+            padding: 15px;
+        }
+        .stats-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+        .stats-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .campaign-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Email Warmer</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Главная</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/smtp-test">SMTP-серверы</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/campaigns">Кампании</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/dashboard">Дашборд</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logs">Логи</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container mt-4">
+        <div id="alertContainer"></div>
+        
+        <h2>Дашборд</h2>
+        
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Всего кампаний</h3>
+                    <div class="value" id="total-campaigns">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Активные кампании</h3>
+                    <div class="value" id="active-campaigns">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Приостановленные</h3>
+                    <div class="value" id="paused-campaigns">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Завершенные</h3>
+                    <div class="value" id="completed-campaigns">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Всего писем</h3>
+                    <div class="value" id="total-emails">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Доставлено</h3>
+                    <div class="value" id="delivered-emails">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Получено ответов</h3>
+                    <div class="value" id="replied-emails">0</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <h3>Помечено как спам</h3>
+                    <div class="value" id="spam-emails">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Доставляемость</h3>
+                    </div>
+                    <div class="card-body">
+                        <h4>Процент доставки</h4>
+                        <div class="progress mb-3">
+                            <div id="delivery-rate" class="progress-bar bg-success" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                        
+                        <h4>Процент ответов</h4>
+                        <div class="progress mb-3">
+                            <div id="reply-rate" class="progress-bar bg-warning" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                        
+                        <h4>Процент спама</h4>
+                        <div class="progress mb-3">
+                            <div id="spam-rate" class="progress-bar bg-danger" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                        
+                        <h4>Процент отвечающих ящиков</h4>
+                        <div class="progress">
+                            <div id="responding-mailboxes-rate" class="progress-bar bg-info" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Динамика отправки писем</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="emailsChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Статус кампаний</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="campaignsChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>Активные кампании</h3>
+            </div>
+            <div class="card-body campaign-list">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Название</th>
+                                <th>SMTP-сервер</th>
+                                <th>Прогресс</th>
+                                <th>Писем в день</th>
+                                <th>% отвечающих</th>
+                                <th>Дата начала</th>
+                                <th>Ожидаемое завершение</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="active-campaigns-table">
+                            <tr>
+                                <td colspan="8" class="text-center">Загрузка активных кампаний...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html> 

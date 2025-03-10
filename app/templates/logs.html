@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Логи отправки писем - Email Warmer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .log-container {
+            max-height: 600px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .log-entry.info {
+            color: #0d6efd;
+        }
+        .log-entry.error {
+            color: #dc3545;
+        }
+        .log-entry.warning {
+            color: #ffc107;
+        }
+        .log-entry.success {
+            color: #198754;
+        }
+        .log-time {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .log-campaign {
+            font-weight: bold;
+            margin-right: 10px;
+            color: #6610f2;
+        }
+        .log-message {
+            display: inline-block;
+        }
+        .filter-container {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Email Warmer</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Главная</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/smtp-test">SMTP-серверы</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/campaigns">Кампании</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">Дашборд</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/logs">Логи</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container mt-4">
+        <h2>Логи отправки писем</h2>
+        
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3>Журнал отправки писем</h3>
+                    <button id="refreshLogs" class="btn btn-primary">Обновить</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="filter-container">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label for="campaignFilter" class="form-label">Фильтр по кампании:</label>
+                            <select id="campaignFilter" class="form-select">
+                                <option value="all">Все кампании</option>
+                                <!-- Список кампаний будет загружен динамически -->
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="levelFilter" class="form-label">Фильтр по уровню:</label>
+                            <select id="levelFilter" class="form-select">
+                                <option value="all">Все уровни</option>
+                                <option value="info">Информация</option>
+                                <option value="error">Ошибки</option>
+                                <option value="warning">Предупреждения</option>
+                                <option value="success">Успешные</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="dateFilter" class="form-label">Фильтр по дате:</label>
+                            <input type="date" id="dateFilter" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="log-container" id="logContainer">
+                    <p class="text-center">Загрузка логов...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Функция для загрузки логов
+        function loadLogs() {
+            const campaignFilter = document.getElementById('campaignFilter').value;
+            const levelFilter = document.getElementById('levelFilter').value;
+            const dateFilter = document.getElementById('dateFilter').value;
+            
+            const logContainer = document.getElementById('logContainer');
+            logContainer.innerHTML = '<p class="text-center">Загрузка логов...</p>';
+            
+            // Формируем параметры запроса
+            const params = new URLSearchParams();
+            if (campaignFilter !== 'all') params.append('campaign_id', campaignFilter);
+            if (levelFilter !== 'all') params.append('level', levelFilter);
+            if (dateFilter) params.append('date', dateFilter);
+            
+            // Отправляем запрос на получение логов
+            fetch(`/api/logs?${params.toString()}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при загрузке логов');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.logs && data.logs.length > 0) {
+                        let html = '';
+                        data.logs.forEach(log => {
+                            const logClass = log.level.toLowerCase();
+                            html += `
+                                <div class="log-entry ${logClass}">
+                                    <span class="log-time">${log.timestamp}</span>
+                                    <span class="log-campaign">${log.campaign_name || 'Система'}</span>
+                                    <span class="log-message">${log.message}</span>
+                                </div>
+                            `;
+                        });
+                        logContainer.innerHTML = html;
+                    } else {
+                        logContainer.innerHTML = '<p class="text-center">Нет логов для отображения</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    logContainer.innerHTML = '<p class="text-center text-danger">Ошибка при загрузке логов</p>';
+                });
+        }
+        
+        // Функция для загрузки списка кампаний
+        function loadCampaigns() {
+            fetch('/api/campaigns')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ошибка при загрузке кампаний');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const campaignFilter = document.getElementById('campaignFilter');
+                    
+                    // Сохраняем текущее выбранное значение
+                    const currentValue = campaignFilter.value;
+                    
+                    // Очищаем список
+                    campaignFilter.innerHTML = '<option value="all">Все кампании</option>';
+                    
+                    // Добавляем кампании в список
+                    if (data && data.length > 0) {
+                        data.forEach(campaign => {
+                            const option = document.createElement('option');
+                            option.value = campaign.id;
+                            option.textContent = campaign.name;
+                            campaignFilter.appendChild(option);
+                        });
+                    }
+                    
+                    // Восстанавливаем выбранное значение, если оно существует
+                    if (currentValue !== 'all') {
+                        campaignFilter.value = currentValue;
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                });
+        }
+        
+        // Обработчики событий
+        document.addEventListener('DOMContentLoaded', function() {
+            // Загружаем логи и кампании при загрузке страницы
+            loadLogs();
+            loadCampaigns();
+            
+            // Обработчик кнопки обновления логов
+            document.getElementById('refreshLogs').addEventListener('click', loadLogs);
+            
+            // Обработчики изменения фильтров
+            document.getElementById('campaignFilter').addEventListener('change', loadLogs);
+            document.getElementById('levelFilter').addEventListener('change', loadLogs);
+            document.getElementById('dateFilter').addEventListener('change', loadLogs);
+            
+            // Автоматическое обновление логов каждые 30 секунд
+            setInterval(loadLogs, 30000);
+        });
+    </script>
+</body>
+</html> 
